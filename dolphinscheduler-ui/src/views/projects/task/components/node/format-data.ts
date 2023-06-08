@@ -23,8 +23,7 @@ import type {
   ISqoopTargetParams,
   ISqoopSourceParams,
   ILocalParam,
-  IDependTask,
-  RelationType
+  IDependentParameters
 } from './types'
 
 export function formatParams(data: INodeData): {
@@ -203,6 +202,10 @@ export function formatParams(data: INodeData): {
       if (data.udfs) taskParams.udfs = data.udfs.join(',')
       taskParams.connParams = data.connParams
     }
+
+    if (data.type === 'KYUUBI') {
+      if (data.udfs) taskParams.udfs = data.udfs.join(',')
+    }
   }
 
   if (data.taskType === 'PROCEDURE') {
@@ -212,21 +215,21 @@ export function formatParams(data: INodeData): {
   }
 
   if (data.taskType === 'SEATUNNEL') {
-    taskParams.engine = data.engine
+    taskParams.startupScript = data.startupScript
     taskParams.useCustom = data.useCustom
     taskParams.rawScript = data.rawScript
-    switch (data.engine) {
-      case 'FLINK':
-        taskParams.runMode = data.runMode
-        taskParams.others = data.others
-        break
-      case 'SPARK':
-        taskParams.deployMode = data.deployMode
-        taskParams.master = data.master
-        taskParams.masterUrl = data.masterUrl
-        break
-      default:
-        break
+    if (data.startupScript?.includes('flink')) {
+      taskParams.runMode = data.runMode
+      taskParams.others = data.others
+    }
+    if (data.startupScript?.includes('spark')) {
+      taskParams.deployMode = data.deployMode
+      taskParams.master = data.master
+      taskParams.masterUrl = data.masterUrl
+    }
+    if (data.startupScript === 'seatunnel.sh') {
+      taskParams.deployMode = data.deployMode
+      taskParams.others = data.others
     }
   }
 
@@ -275,6 +278,9 @@ export function formatParams(data: INodeData): {
   }
   if (data.taskType === 'DEPENDENT') {
     taskParams.dependence = {
+      checkInterval: data.checkInterval,
+      failurePolicy: data.failurePolicy,
+      failureWaitingTime: data.failureWaitingTime,
       relation: data.relation,
       dependTaskList: data.dependTaskList
     }
@@ -330,6 +336,8 @@ export function formatParams(data: INodeData): {
     taskParams.noteId = data.noteId
     taskParams.paragraphId = data.paragraphId
     taskParams.restEndpoint = data.restEndpoint
+    taskParams.username = data.username
+    taskParams.password = data.password
     taskParams.productionNoteDirectory = data.productionNoteDirectory
     taskParams.parameters = data.parameters
   }
@@ -340,6 +348,9 @@ export function formatParams(data: INodeData): {
     taskParams.minMemorySpace = data.minMemorySpace
     taskParams.image = data.image
     taskParams.command = data.command
+    taskParams.args = data.args
+    taskParams.customizedLabels = data.customizedLabels
+    taskParams.nodeSelectors = data.nodeSelectors
   }
 
   if (data.taskType === 'JUPYTER') {
@@ -465,6 +476,11 @@ export function formatParams(data: INodeData): {
     taskParams.pipelineName = data.pipelineName
   }
 
+  if (data.taskType === 'REMOTESHELL') {
+    taskParams.type = data.type
+    taskParams.datasource = data.datasource
+  }
+
   let timeoutNotifyStrategy = ''
   if (data.timeoutNotifyStrategy) {
     if (data.timeoutNotifyStrategy.length === 1) {
@@ -487,7 +503,7 @@ export function formatParams(data: INodeData): {
         : '0',
       failRetryTimes: data.failRetryTimes ? String(data.failRetryTimes) : '0',
       flag: data.flag,
-      isCache: data.isCache ? "YES" : "NO",
+      isCache: data.isCache ? 'YES' : 'NO',
       name: data.name,
       taskGroupId: data.taskGroupId,
       taskGroupPriority: data.taskGroupPriority,
@@ -499,7 +515,9 @@ export function formatParams(data: INodeData): {
         initScript: data.initScript,
         rawScript: data.rawScript,
         resourceList: data.resourceList?.length
-          ? data.resourceList.map((fullName: string) => ({ resourceName: `${fullName}` }))
+          ? data.resourceList.map((fullName: string) => ({
+              resourceName: `${fullName}`
+            }))
           : [],
         ...taskParams
       },
@@ -548,7 +566,7 @@ export function formatModel(data: ITaskData) {
   }
   if (data.taskParams?.resourceList) {
     params.resourceList = data.taskParams.resourceList.map(
-      (item: { resourceName: string }) => (`${item.resourceName}`)
+      (item: { resourceName: string }) => `${item.resourceName}`
     )
   }
   if (data.taskParams?.mainJar) {
@@ -638,7 +656,12 @@ export function formatModel(data: ITaskData) {
   }
 
   if (data.taskParams?.dependence) {
-    const dependence: { relation?: RelationType, dependTaskList?: IDependTask[] } = JSON.parse(JSON.stringify(data.taskParams.dependence))
+    const dependence: IDependentParameters = JSON.parse(
+      JSON.stringify(data.taskParams.dependence)
+    )
+    params.checkInterval = dependence.checkInterval
+    params.failurePolicy = dependence.failurePolicy
+    params.failureWaitingTime = dependence.failureWaitingTime
     params.dependTaskList = dependence.dependTaskList || []
     params.relation = dependence.relation
   }

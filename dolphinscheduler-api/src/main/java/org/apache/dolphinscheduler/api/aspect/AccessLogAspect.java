@@ -17,7 +17,9 @@
 
 package org.apache.dolphinscheduler.api.aspect;
 
+import org.apache.dolphinscheduler.api.metrics.ApiServerMetrics;
 import org.apache.dolphinscheduler.common.constants.Constants;
+import org.apache.dolphinscheduler.common.utils.CodeGenerateUtils;
 import org.apache.dolphinscheduler.dao.entity.User;
 
 import org.apache.commons.lang3.StringUtils;
@@ -26,7 +28,6 @@ import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Set;
-import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -79,7 +80,7 @@ public class AccessLogAspect {
         Method method = sign.getMethod();
         AccessLogAnnotation annotation = method.getAnnotation(AccessLogAnnotation.class);
 
-        String traceId = UUID.randomUUID().toString();
+        String traceId = String.valueOf(CodeGenerateUtils.getInstance().genCode());
 
         // log request
         if (!annotation.ignoreRequest()) {
@@ -110,7 +111,9 @@ public class AccessLogAspect {
 
         Object ob = proceedingJoinPoint.proceed();
 
-        log.info("Call {}:{} success, cost: {}ms", requestMethod, URI, (System.currentTimeMillis() - startTime));
+        long costTime = System.currentTimeMillis() - startTime;
+        log.info("Call {}:{} success, cost: {}ms", requestMethod, URI, costTime);
+        ApiServerMetrics.recordApiResponseTime(costTime);
 
         return ob;
     }
